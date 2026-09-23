@@ -22,13 +22,13 @@ class QueryProcessor:
         return text
 
     @classmethod
-    def process_text(cls, text: str) -> ProcessedQuery:
-        text = text.lower().strip()
+    def process(cls, raw_query: str) -> ProcessedQuery:
+        raw_trimmed = raw_query.strip()
+    
+        first_word = raw_trimmed.lower().split()[0] if raw_trimmed else ""
+        is_question = raw_trimmed.endswith("?") or first_word in QUESTION_STARTERS
 
-        first_word = text.lower().split()[0] if text else ""
-        is_question = text.endswith("?") or first_word in QUESTION_STARTERS
-
-        normalized = cls.clean_text(text)
+        normalized = cls.clean_text(raw_trimmed)
         tokens = normalized.split() if normalized else []
 
         filtered_tokens = [t for t in tokens if t not in STOP_WORDS]
@@ -37,14 +37,9 @@ class QueryProcessor:
             filtered_tokens = tokens
 
         return ProcessedQuery(
-            raw_query=text,
+            raw_query=raw_query,
             normalized_query=normalized,
             tokens=tokens,
             filtered_tokens=filtered_tokens,
             is_question=is_question,
         )
-
-
-
-
-

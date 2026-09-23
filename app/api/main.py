@@ -19,19 +19,19 @@ app.add_middleware(
 
 MOCK_INDEX = [
     {
-        "id": 1,
+        "id": "1",
         "title": "FastAPI Documentation",
         "url": "https://fastapi.tiangolo.com",
         "snippet": "FastAPI framework, high performance, easy to learn, fast to code, ready for production",
     },
     {
-        "id": 2,
+        "id": "2",
         "title": "Python Official Documentation",
         "url": "https://docs.python.org",
         "snippet": "Official documentation for the Python programming language.",
     },
     {
-        "id": 3,
+        "id": "3",
         "title": "Building a Search Engine in Python",
         "url": "https://example.com/search-engine-guide",
         "snippet": "Learn inverted indexes, tokenization, BM25 ranking, and vector search.",
