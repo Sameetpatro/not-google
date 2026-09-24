@@ -76,6 +76,8 @@ class DocumentDeduplicator:
         return False, None
 
 
+
+#testing
 def test_deduplication():
     dedup = DocumentDeduplicator(simhash_threshold=3)
 
