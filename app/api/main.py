@@ -1,12 +1,34 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from app.query.processor import QueryProcessor
+
 from app.api.schemas import SearchResponse, SearchItem
+from app.query.processor import QueryProcessor
+from app.engine.indexer import InvertedIndex
+from app.engine.bm25 import BM25Ranker
+
+index = InvertedIndex(index_file_path="search_index.pkl")
+ranker: BM25Ranker = BM25Ranker(index=index)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global ranker
+    # Load serialized index on startup
+    loaded = index.load_from_disk()
+    if loaded:
+        print(f"[Lifespan] Loaded {index.total_docs} indexed documents.")
+    else:
+        print("[Lifespan] No index file found on disk. Run sync_indexer first.")
+    
+    ranker = BM25Ranker(index=index)
+    yield
+
 
 app = FastAPI(
     title="NotGoogle",
     description="Basic endpoint to check query passing",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -47,27 +69,16 @@ def search(
     ai_overview: bool = Query(False, description="Ai overview toggle")
 ):
     processed_query = QueryProcessor.process(q)
-    print(f"Processed Query: {processed_query}")
 
-    search_terms = processed_query.filtered_tokens
+    ranked_results = ranker.search(processed_query.filtered_tokens, top_k=50)
+    paginated_results = ranked_results[offset : offset + limit]
 
-    matched_res = []
-    for item in MOCK_INDEX:
-        content = f"{item['title']} {item['snippet']}".lower()
-        if any(term in content for term in search_terms):
-            matched_res.append(item)
-
-    if ai_overview:
-        pass
-
-    paginated_results = matched_res[offset : offset + limit]
-
-    return {
-        "query": q,
-        "total_res": len(matched_res),
-        "ai_overview": None,
-        "resp": paginated_results,
-    }
+    return SearchResponse(
+        query=q,
+        total_res=len(ranked_results),
+        ai_overview=None,
+        resp=paginated_results,
+    )
 
 @app.get("/health")
 def health_check():
