@@ -24,3 +24,12 @@ class ProcessedQuery(BaseModel):
     tokens: list[str] = Field(default_factory=list, description="Extracted word tokens")
     filtered_tokens: list[str] = Field(default_factory=list, description="Tokens with stop words removed")
     is_question: bool = Field(default=False, description="Whether the query is informational/question-based")
+
+
+class ExtractedDocument(BaseModel):
+    url: str = Field(..., description="Canonical source URL of the document")
+    title: str = Field(..., description="Extracted page title")
+    snippet: str = Field(..., description="Meta description or first 200 chars of body")
+    text_content: str = Field(..., description="Cleaned readable body text without boilerplates")
+    outlinks: list[str] = Field(default_factory=list, description="Extracted and canonicalized outgoing URLs")
+    content_length: int = Field(default=0, description="Length of clean text in characters")
