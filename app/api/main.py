@@ -1,33 +1,51 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
-from app.api.schemas import SearchResponse, SearchItem
+from app.api.schemas import SearchResponse
 from app.query.processor import QueryProcessor
 from app.engine.indexer import InvertedIndex
 from app.engine.bm25 import BM25Ranker
+from app.engine.crawler.storage import PostgresDocumentStore
+from app.engine.vector_store import VectorSearchEngine
+from app.engine.hybrid import HybridRetriever
 
 index = InvertedIndex(index_file_path="search_index.pkl")
 ranker: BM25Ranker = BM25Ranker(index=index)
 
+db_store = PostgresDocumentStore()
+index = InvertedIndex(index_file_path="search_index.pkl")
+bm25_ranker: BM25Ranker = None
+vector_engine: VectorSearchEngine = None
+hybrid_retriever: HybridRetriever = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global ranker
-    # Load serialized index on startup
-    loaded = index.load_from_disk()
-    if loaded:
-        print(f"[Lifespan] Loaded {index.total_docs} indexed documents.")
-    else:
-        print("[Lifespan] No index file found on disk. Run sync_indexer first.")
-    
-    ranker = BM25Ranker(index=index)
-    yield
+    global bm25_ranker, vector_engine, hybrid_retriever
+    await db_store.connect()
 
+    # Load serialized index on startup
+
+    index.load_from_disk()
+    bm25_ranker = BM25Ranker(index=index)
+
+    vector_engine = VectorSearchEngine(db_store=db_store)
+
+    hybrid_retriever = HybridRetriever(
+        bm25_ranker=bm25_ranker,
+        vector_engine=vector_engine,
+        rrf_k=60,
+    )
+    print("[Lifespan] Hybrid search pipeline successfully initialized!")
+
+    yield
+    await db_store.disconnect()
 
 app = FastAPI(
     title="NotGoogle",
     description="Basic endpoint to check query passing",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan,
 )
 
@@ -62,7 +80,7 @@ MOCK_INDEX = [
 
 
 @app.get("/search", response_model=SearchResponse)
-def search(
+async def search(
     q: str = Query(..., description="your query"),
     limit: int = Query(10, ge=1, le=50, description="Max results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
@@ -70,7 +88,12 @@ def search(
 ):
     processed_query = QueryProcessor.process(q)
 
-    ranked_results = ranker.search(processed_query.filtered_tokens, top_k=50)
+    ranked_results = await hybrid_retriever.search(
+        query=processed_query,
+        candidate_pool_size=30,
+        top_k=50,
+    )
+
     paginated_results = ranked_results[offset : offset + limit]
 
     return SearchResponse(
@@ -82,4 +105,8 @@ def search(
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "indexed_bm25_docs": index.total_docs,
+        "hybrid_ready": hybrid_retriever is not None,
+    }
