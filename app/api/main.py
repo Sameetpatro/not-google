@@ -9,6 +9,8 @@ from app.engine.bm25 import BM25Ranker
 from app.engine.crawler.storage import PostgresDocumentStore
 from app.engine.vector_store import VectorSearchEngine
 from app.engine.hybrid import HybridRetriever
+from app.engine.reranker import DocumentReranker
+
 
 index = InvertedIndex(index_file_path="search_index.pkl")
 ranker: BM25Ranker = BM25Ranker(index=index)
@@ -18,11 +20,12 @@ index = InvertedIndex(index_file_path="search_index.pkl")
 bm25_ranker: BM25Ranker = None
 vector_engine: VectorSearchEngine = None
 hybrid_retriever: HybridRetriever = None
+reranker: DocumentReranker = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global bm25_ranker, vector_engine, hybrid_retriever
+    global bm25_ranker, vector_engine, hybrid_retriever, reranker
     await db_store.connect()
 
     # Load serialized index on startup
@@ -37,6 +40,8 @@ async def lifespan(app: FastAPI):
         vector_engine=vector_engine,
         rrf_k=60,
     )
+
+    reranker = DocumentReranker()
     print("[Lifespan] Hybrid search pipeline successfully initialized!")
 
     yield
@@ -88,17 +93,23 @@ async def search(
 ):
     processed_query = QueryProcessor.process(q)
 
-    ranked_results = await hybrid_retriever.search(
+    candidates = await hybrid_retriever.search(
         query=processed_query,
-        candidate_pool_size=30,
+        candidate_pool_size=25,
+        top_k=25,
+    )
+
+    reranked_results = reranker.rerank(
+        query=q,
+        candidates=candidates,
         top_k=50,
     )
 
-    paginated_results = ranked_results[offset : offset + limit]
+    paginated_results = reranked_results[offset : offset + limit]
 
     return SearchResponse(
         query=q,
-        total_res=len(ranked_results),
+        total_res=len(reranked_results),
         ai_overview=None,
         resp=paginated_results,
     )
@@ -109,4 +120,5 @@ def health_check():
         "status": "ok",
         "indexed_bm25_docs": index.total_docs,
         "hybrid_ready": hybrid_retriever is not None,
+        "reranker_ready": reranker is not None,
     }
