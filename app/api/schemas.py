@@ -16,6 +16,8 @@ class SearchResponse(BaseModel):
     total_res: int = Field(..., description="Count of matched items")
     ai_overview: Optional[str] = Field(default=None, description="Synthesized AI overview if requested")
     resp: list[SearchItem] = Field(default_factory=list, description="Ranked list of results")
+    searxng_resp: Optional[list[SearchItem]] = Field(
+        default=None, description="SearXNG results when toggle is enabled")
 
 
 class ProcessedQuery(BaseModel):
