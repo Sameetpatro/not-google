@@ -10,6 +10,15 @@ class SearchItem(BaseModel):
     score: float = Field(default=0.0, description="Relevance or rank score")
     source: str = Field(default="local", description="Provider origin: 'local' or 'searxng'")
 
+class CitationSource(BaseModel):
+    citation_id: int = Field(..., description="Numeric index [1], [2], etc.")
+    title: str = Field(..., description="Source title")
+    url: str = Field(..., description="Source URL")
+    snippet: str = Field(..., description="Extracted supporting passage")
+
+class AIOverviewPayload(BaseModel):
+    markdown_text: str = Field(..., description="Synthesized summary with inline citations like [1]")
+    sources: list[CitationSource] = Field(default_factory=list, description="Referenced citations")
 
 class SearchResponse(BaseModel):
     query: str = Field(..., description="Original raw or normalized query")
