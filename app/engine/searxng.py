@@ -84,3 +84,36 @@ class SearXNGClient:
         except Exception as exc:
             print(f"[SearXNG] Unexpected error parsing response: {exc}")
             return []
+
+    async def close(self):
+        """Clean shutdown hook for client resources."""
+        pass
+
+    async def check_health(self) -> dict:
+        """Probes connectivity to configured SearXNG instance."""
+        try:
+            async with httpx.AsyncClient(timeout=2.5) as client:
+                resp = await client.get(f"{self.base_url}/healthz")
+                if resp.status_code == 200:
+                    return {"primary_url": self.base_url, "primary_healthy": True, "primary_status_code": 200}
+        except Exception:
+            pass
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = await client.get(
+                    f"{self.base_url}/search",
+                    params={"q": "ping", "format": "json"},
+                    headers=self._build_headers(),
+                )
+                return {
+                    "primary_url": self.base_url,
+                    "primary_healthy": resp.status_code == 200,
+                    "primary_status_code": resp.status_code,
+                }
+        except Exception as exc:
+            return {
+                "primary_url": self.base_url,
+                "primary_healthy": False,
+                "primary_error": str(exc),
+            }

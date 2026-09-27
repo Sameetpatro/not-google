@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.schemas import SearchResponse, SearchItem
+from app.api.schemas import SearchResponse, SearchItem, AIOverviewPayload
 from app.query.processor import QueryProcessor
 from app.engine.indexer import InvertedIndex
 from app.engine.bm25 import BM25Ranker
@@ -13,6 +13,7 @@ from app.engine.vector_store import VectorSearchEngine
 from app.engine.hybrid import HybridRetriever
 from app.engine.reranker import DocumentReranker
 from app.engine.searxng import SearXNGClient
+from app.engine.overview import AIOverviewGenerator
 
 db_store = PostgresDocumentStore()
 index = InvertedIndex(index_file_path="search_index.pkl")
@@ -21,6 +22,7 @@ vector_engine: VectorSearchEngine = None
 hybrid_retriever: HybridRetriever = None
 reranker: DocumentReranker = None
 searxng_client = SearXNGClient()
+overview_generator = AIOverviewGenerator()
 
 
 @asynccontextmanager
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI):
 
     yield
     await db_store.disconnect()
+    await searxng_client.close()
 
 app = FastAPI(
     title="NotGoogle",
@@ -106,9 +109,9 @@ async def search(
         )
         return reranker.rerank(query=q, candidates=candidates, top_k=max(25, offset + limit))
 
-    # searXNG Web Search
+    # searXNG Web Search (fetched if user wants side-by-side web results OR if needed for AI Overview)
     async def run_searxng_pipeline() -> Optional[list[SearchItem]]:
-        if not include_searxng:
+        if not (include_searxng or ai_overview):
             return None
         return await searxng_client.search(query=q, limit=limit)
 
@@ -118,21 +121,32 @@ async def search(
         run_searxng_pipeline(),
     )
 
+    overview_payload: Optional[AIOverviewPayload] = None
+    if ai_overview:
+        overview_payload = await overview_generator.generate_overview(
+            query=q,
+            local_results=local_results,
+            web_results=searxng_results,
+        )
+    
+    display_searxng = searxng_results if include_searxng else None
     paginated_local = local_results[offset : offset + limit]
 
     return SearchResponse(
         query=q,
         total_res=len(local_results),
-        ai_overview=None,
+        ai_overview=overview_payload,
         resp=paginated_local,
-        searxng_resp=searxng_results,
+        searxng_resp=display_searxng,
     )
 
 @app.get("/health")
-def health_check():
+async def health_check():
+    searxng_health = await searxng_client.check_health()
     return {
         "status": "ok",
         "indexed_bm25_docs": index.total_docs,
         "hybrid_ready": hybrid_retriever is not None,
         "reranker_ready": reranker is not None,
+        "searxng": searxng_health,
     }
