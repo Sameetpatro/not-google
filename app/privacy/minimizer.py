@@ -40,3 +40,6 @@ class QueryMinimizer:
                 return minimized
 
         return cleaned if len(cleaned) >= 5 else text
+
+    # Alias for US/UK spelling compatibility
+    minimize = minimise

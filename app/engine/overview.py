@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from app.api.schemas import AIOverviewPayload, SearchItem
 from app.engine.evidence import EvidenceEngine
+from app.privacy.service import PrivacyService
 
 load_dotenv()
 
@@ -24,6 +25,7 @@ Strict Rules:
         # Configurable model: e.g., "groq/llama-3.3-70b-versatile", "gemini/gemini-1.5-flash", "gpt-4o-mini", or local "ollama/llama3"
         self.model = model_name or os.getenv("LLM_MODEL", "groq/llama-3.3-70b-versatile")
         self.evidence_engine = EvidenceEngine(max_sources=5)
+        self.privacy_service = PrivacyService()
 
     async def generate_overview(
         self,
@@ -47,9 +49,13 @@ Strict Rules:
         if not citations or not evidence_text.strip():
             return None
 
+        # BOUNDARY ENFORCEMENT: Scrub evidence context of any lingering PII before sending to external LLM
+        safe_evidence = self.privacy_service.sanitize_context_for_llm(evidence_text)
+        safe_query = self.privacy_service.sanitize_context_for_llm(query)
+
         user_content = (
-            f"User Query: \"{query}\"\n\n"
-            f"Retrieved Sources:\n{evidence_text}\n\n"
+            f"User Query: \"{safe_query}\"\n\n"
+            f"Retrieved Sources:\n{safe_evidence}\n\n"
             "Provide an AI Overview answering the query using the sources above with inline citations [1], [2], etc."
         )
 
