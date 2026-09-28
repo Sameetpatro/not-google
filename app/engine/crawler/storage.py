@@ -162,6 +162,30 @@ class PostgresDocumentStore:
         async with self.pool.acquire() as conn:
             return await conn.fetchval(query)
 
+    async def get_all_crawled_urls_and_outlinks(self, limit: int = 15000) -> tuple[set[str], list[str]]:
+        """
+        Returns all previously crawled URLs (to prevent re-crawling on server restart)
+        and unvisited outlinks (to repopulate the frontier queue).
+        """
+        query = "SELECT url, outlinks FROM documents ORDER BY id DESC LIMIT $1;"
+        seen_urls = set()
+        pending_outlinks = []
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(query, limit)
+            for row in rows:
+                url = row["url"]
+                seen_urls.add(url)
+                raw_outlinks = row["outlinks"]
+                if raw_outlinks:
+                    try:
+                        links = json.loads(raw_outlinks) if isinstance(raw_outlinks, str) else raw_outlinks
+                        for link in links:
+                            if link not in seen_urls:
+                                pending_outlinks.append(link)
+                    except Exception:
+                        pass
+        return seen_urls, pending_outlinks
+
 #testing
 async def main():
     store = PostgresDocumentStore()

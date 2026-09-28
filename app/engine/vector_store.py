@@ -27,6 +27,9 @@ class VectorSearchEngine:
         embedding = model.encode(text, normalize_embeddings=True)
         return embedding.tolist()
 
+    async def encode_async(self, text: str) -> list[float]:
+        return await asyncio.to_thread(self.encode, text)
+
     async def init_vector_extension(self):
         query = f"""
         CREATE EXTENSION IF NOT EXISTS vector;
@@ -57,16 +60,13 @@ class VectorSearchEngine:
         async with self.db.pool.acquire() as conn:
             rows = await conn.fetch(select_query, batch_size)
             if not rows:
-                print("[VectorEngine] No missing embeddings to generate.")
                 return
 
             print(f"[VectorEngine] Generating embeddings for {len(rows)} documents...")
             for row in rows:
                 doc_id = row["id"]
-
                 text_to_embed = f"{row['title']}. {row['snippet']}"
-                vec = self.encode(text_to_embed)
-
+                vec = await self.encode_async(text_to_embed)
                 vec_str = json.dumps(vec)
                 await conn.execute(update_query, vec_str, doc_id)
 

@@ -1,4 +1,5 @@
 import time
+import asyncio
 from collections import deque
 from urllib.parse import urlparse, urlunparse, urldefrag
 from typing import Optional
@@ -90,5 +91,37 @@ class URLFrontier:
         if time_to_wait > 0:
             time.sleep(time_to_wait)
             
+        self.host_last_crawled[host] = time.time()
+        return url
+
+    async def get_next_url_async(self) -> Optional[str]:
+        if not self.queue:
+            return None
+
+        checked_count = 0
+        queue_len = len(self.queue)
+
+        while checked_count < queue_len:
+            url = self.queue.popleft()
+            host = urlparse(url).netloc
+            now = time.time()
+            last_time = self.host_last_crawled.get(host, 0.0)
+
+            if now - last_time >= self.politeness_delay:
+                self.host_last_crawled[host] = now
+                return url
+            else:
+                self.queue.append(url)
+                checked_count += 1
+
+        url = self.queue.popleft()
+        host = urlparse(url).netloc
+        now = time.time()
+        last_time = self.host_last_crawled.get(host, 0.0)
+        time_to_wait = self.politeness_delay - (now - last_time)
+
+        if time_to_wait > 0:
+            await asyncio.sleep(time_to_wait)
+
         self.host_last_crawled[host] = time.time()
         return url

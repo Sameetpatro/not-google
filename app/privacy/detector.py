@@ -34,7 +34,7 @@ class PIIDetector:
             0.98,
         ),
         "PASSWORD_ASSIGNMENT": (
-            re.compile(r"""(?i)\b(?:password|passwd|pwd|secret)\s*[:=]\s*['"]?([^\s'"]{6,})['"]?"""),
+            re.compile(r"""(?i)\b(?:password|passwd|pwd|secret)\s*(?:[:=]|\bis\b)\s*['"]?([^\s'"]{6,})['"]?"""),
             "[SECRET]",
             0.90,
         ),
@@ -57,7 +57,7 @@ class PIIDetector:
             re.compile(r"""(?x)
                 (?:\+?\d{1,3}[-.\s]?)?
                 (?:\(?\d{2,4}\)?[-.\s]?)?
-                \d{3,5}[-.\s]?\d{4}
+                \d{3,5}[-.\s]?\d{4,5}
                 \b
             """),
             "[PHONE]",
@@ -97,6 +97,8 @@ class PIIDetector:
 
     @staticmethod
     def _resolve_overlaps(entities: list[PrivacyEntity]) -> list[PrivacyEntity]:
+        if not entities:
+            return []
         sorted_entities = sorted(entities, key=lambda e: (e.start, -(e.end - e.start)))
         resolved: list[PrivacyEntity] = [sorted_entities[0]]
 
