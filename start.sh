@@ -116,6 +116,7 @@ echo ""
 # Cleanup handler on exit or Ctrl+C
 # ------------------------------------------------------------------------------
 cleanup() {
+  trap - SIGINT SIGTERM EXIT
   echo -e "\n\n${YELLOW}Shutting down NotGoogle stack...${NC}"
   if [ -n "$BACKEND_PID" ]; then
     echo "  Stopping backend (PID: $BACKEND_PID)..."
