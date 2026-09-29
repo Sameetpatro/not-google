@@ -69,7 +69,7 @@ $$\text{CosineSim}(u, v) = \frac{u \cdot v}{\|u\|_2 \|v\|_2} = \frac{\sum_{i=1}^
 ### 3. Reciprocal Rank Fusion (RRF)
 Merges ranked lists from lexical (BM25) and semantic (dense vector) retrieval into a single unified candidate pool using smoothing constant $k = 60$:
 
-$$\text{RRF\_Score}(d) = \sum_{m \in \{\text{BM25}, \text{Vector}\}} \frac{1}{k + r_m(d)}$$
+$$\text{Score}_{\text{RRF}}(d) = \sum_{m \in \{\text{BM25}, \text{Vector}\}} \frac{1}{k + r_m(d)}$$
 
 Where $r_m(d) \in \{1, 2, \dots\}$ represents the 1-based rank of document $d$ within retrieval system $m$.
 
